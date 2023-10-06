@@ -27,16 +27,18 @@ const start = async () =>  {
     bot.setMyCommands([
         {command: "/start", description: "Приветствие"},
         {command: "/info", description: "Информация о пользователе"},
-        {command: "/game", description: "Начать игру"}
+        {command: "/game", description: "Начать игру"},
+        {command: "rating", description: "Рейтинг пользователей"}
     ])
 
     bot.on('message', async msg => {
         const text = msg.text;
         const chatId = msg.chat.id;
+        const username = msg.from.username;
 
         try{
             if (text === "/start") {
-                await UserModel.create({chatId});
+                await UserModel.create({chatId: chatId, username: username});
                 return  bot.sendSticker(chatId, "https://tlgrm.eu/_/stickers/b0d/85f/b0d85fbf-de1b-4aaf-836c-1cddaa16e002/192/3.webp")
             }
 
@@ -45,12 +47,22 @@ const start = async () =>  {
                 return  bot.sendMessage(chatId, `В игре у тебя ${user.right} правильных ответов и ${user.wrong} ошибочных, процент попадания ${Number((user.right/user.wrong)).toFixed(1)}%`)
             }
 
+            if (text === "/rating") {
+                const users = await UserModel.findAll({order: [["right", "ASC"]]});
+                await bot.sendMessage(chatId, "Рейтинг игроков:");
+                users.forEach((user, inc) => {
+                    bot.sendMessage(chatId, ` ${++inc}.${user.username}: ${user.right}`);
+                })
+                return;
+            }
+
             if (text === "/game") {
                 return startGame(chatId);
 
             }
             return bot.sendMessage(chatId, "Я тебя не понимаю, попробуй еще раз")
         } catch (e) {
+            console.log(e)
             return bot.sendMessage(chatId, "Произошла непредвиденная ошибка, напиши мне если увидел данное сообщение")
         }
 
