@@ -3,6 +3,7 @@ const {gameOptions, againOptions} = require("./options")
 const botApi = "6386240481:AAE6D1AxHzwusqApQ-g6TnXABjaWuPX_pUw"
 const sequelize = require("./db")
 const UserModel = require("./models")
+const {where} = require("sequelize");
 const bot = new TelegramBot(botApi, {polling: true});
 
 const chats = {};
@@ -35,6 +36,7 @@ const start = async () =>  {
         const text = msg.text;
         const chatId = msg.chat.id;
         const username = msg.from.username;
+        console.log(username);
 
         try{
             if (text === "/start") {
@@ -43,16 +45,18 @@ const start = async () =>  {
             }
 
             if (text === "/info") {
-                const user = await UserModel.findOne({chatId})
+                const user = await UserModel.findOne({ where: { chatId: String(chatId) } })
+                console.log(user)
                 return  bot.sendMessage(chatId, `В игре у тебя ${user.right} правильных ответов и ${user.wrong} ошибочных, процент попадания ${Number((user.right/user.wrong)).toFixed(1)}%`)
             }
 
             if (text === "/rating") {
-                const users = await UserModel.findAll({order: [["right", "ASC"]]});
+                let pos = 1;
+                const users = await UserModel.findAll({ order: [["right", "DESC"]] });
                 await bot.sendMessage(chatId, "Рейтинг игроков:");
-                users.forEach((user, inc) => {
-                    bot.sendMessage(chatId, ` ${++inc}.${user.username}: ${user.right}`);
-                })
+                for (const [index, user] of users.entries()) {
+                    await bot.sendMessage(chatId, ` ${index + 1}. ${user.username}: ${user.right}`);
+                }
                 return;
             }
 
@@ -71,19 +75,25 @@ const start = async () =>  {
     bot.on("callback_query", async msg=>{
         const data = msg.data;
         const chatId = msg.message.chat.id;
-        if (data === "/again") {
-            return startGame(chatId);
+        console.log(msg.from.username);
+        try {
+            if (data === "/again") {
+                return startGame(chatId);
+            }
+            const user = await UserModel.findOne({ where: { chatId: String(chatId) } })
+            if (parseInt(data) === chats[chatId]) {
+                user.right++;
+                await bot.sendMessage(chatId, "Поздравляю, ты угадал цифру!", againOptions)
+            } else {
+                user.wrong++;
+                await bot.sendMessage(chatId, `К сожалению, загаданное число было ${chats[chatId]}`, againOptions);
+            }
+            await user.save();
+        } catch (e) {
+            console.error("Ошибка при обработке callback_query:", e);
+            await bot.sendMessage(chatId, "Произошла ошибка при обработке запроса.");
         }
-        const user = await UserModel.findOne({chatId});
-        if (data == chats[chatId]) {
-            user.right++;
-            await bot.sendMessage(chatId, "Поздравляю, ты угадал цифру!", againOptions)
-        } else {
-            user.wrong++;
-            await bot.sendMessage(chatId, `К сожалению, загаданное число было ${chats[chatId]}`, againOptions);
-        }
-        await user.save();
-        return;
+
     })
 
 }
